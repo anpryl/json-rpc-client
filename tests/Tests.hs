@@ -14,10 +14,12 @@ import qualified Data.ByteString.Lazy as B
 import Data.Maybe (fromJust)
 import Data.Ratio ((%))
 import Data.Scientific (Scientific)
-import qualified Data.HashMap.Strict as M
+import qualified Data.Aeson.Key as AK
+import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Vector as V
 import Control.Monad.Except (runExceptT, throwError)
-import Control.Monad.State (State, runState, modify, when)
+import Control.Monad (when)
+import Control.Monad.State (State, runState, modify)
 import Test.HUnit hiding (State, Test)
 import Test.Framework (Test)
 import Test.Framework.Providers.HUnit (testCase)
@@ -196,10 +198,13 @@ subtractWithConstServer response = toFunction server subtractSig 1 2
 
 idModifyingServer :: (Scientific -> Scientific) -> Connection RequestCount
 idModifyingServer f = responseModifyingServer modifyIds
-    where modifyIds (A.Array rs) = A.Array $ V.map modifyIds rs
-          modifyIds (A.Object r) = A.Object $ M.adjust modifyId "id" r
-              where modifyId (A.Number i) = A.Number $ f i
-                    modifyId x = x
+    where idKey = AK.fromText "id"
+          modifyId (A.Number i) = A.Number $ f i
+          modifyId x = x
+          modifyIds (A.Array rs) = A.Array $ V.map modifyIds rs
+          modifyIds (A.Object r) = A.Object $ case KM.lookup idKey r of
+              Nothing -> r
+              Just v  -> KM.insert idKey (modifyId v) r
           modifyIds x = x
 
 responseModifyingServer :: (A.Value -> A.Value) -> Connection RequestCount
